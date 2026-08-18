@@ -347,14 +347,14 @@
             const originalBtnHtml = btn.innerHTML;
 
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Calcul du réseau routier...`;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Ajustement précis de la distance...`;
 
             if (placeholder) {
                 placeholder.innerHTML = `
                     <div class="p-6 text-center">
                         <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 text-emerald-400"></i>
-                        <p class="text-sm font-semibold text-slate-200">Génération d'itinéraires réels via OpenStreetMap...</p>
-                        <p class="text-xs text-slate-400 mt-1">Analyse du réseau routier et récupération des données altimétriques...</p>
+                        <p class="text-sm font-semibold text-slate-200">Génération et ajustement fin de la distance (${targetDistance} km)...</p>
+                        <p class="text-xs text-slate-400 mt-1">Analyse du réseau routier et calibration précise du parcours...</p>
                     </div>
                 `;
             }
@@ -364,35 +364,34 @@
 
             // Distinct directional bearings for 5 distinct loop orientations
             const bearings = [
-                0,                  // 0° (North)
-                Math.PI / 2.5,      // ~72° (East-North-East)
-                Math.PI,            // 180° (South)
-                Math.PI * 1.35,     // ~243° (South-West)
-                Math.PI * 1.75      // ~315° (North-West)
+                0,                  // 0° (Nord)
+                Math.PI / 2.5,      // ~72° (Est-Nord-Est)
+                Math.PI,            // 180° (Sud)
+                Math.PI * 1.35,     // ~243° (Sud-Ouest)
+                Math.PI * 1.75      // ~315° (Nord-Ouest)
             ];
 
             try {
                 const routePromises = bearings.map(async (bearing, index) => {
                     const theme = routeThemes[index];
-                    const waypoints = calculateLoopWaypoints(userLocation, targetDistance, bearing, index);
                     
-                    // Format waypoints string: lon,lat;lon,lat;...
-                    const waypointsStr = waypoints.map(wp => `${wp[1].toFixed(6)},${wp[0].toFixed(6)}`).join(';');
-                    const osrmUrl = `https://router.project-osrm.org/route/v1/bike/${waypointsStr}?overview=full&geometries=geojson`;
+                    // First pass waypoint estimation
+                    let waypoints = calculateLoopWaypoints(userLocation, targetDistance, bearing, index, 1.0);
+                    let routeData = await fetchOSRMRoute(waypoints);
 
-                    const response = await fetch(osrmUrl);
-                    if (!response.ok) throw new Error("OSRM Routing API Error");
-                    const data = await response.json();
-
-                    if (!data.routes || data.routes.length === 0) {
-                        throw new Error("No route found");
+                    // Refinement pass if distance gap > 4% to guarantee precise targeted distance
+                    if (routeData && Math.abs(routeData.distanceKm - targetDistance) > (targetDistance * 0.04)) {
+                        const correctionScale = Math.pow(targetDistance / routeData.distanceKm, 0.92);
+                        waypoints = calculateLoopWaypoints(userLocation, targetDistance, bearing, index, correctionScale);
+                        const calibratedData = await fetchOSRMRoute(waypoints);
+                        if (calibratedData) {
+                            routeData = calibratedData;
+                        }
                     }
 
-                    const osrmRoute = data.routes[0];
-                    // Convert [lon, lat] from OSRM to Leaflet [lat, lon]
-                    const pathCoords = osrmRoute.geometry.coordinates.map(c => [c[1], c[0]]);
-                    const actualDistanceKm = (osrmRoute.distance / 1000).toFixed(1);
-                    const durationMinutes = Math.round(osrmRoute.duration / 60);
+                    const pathCoords = routeData.coordinates;
+                    const actualDistanceKm = routeData.distanceKm.toFixed(1);
+                    const durationMinutes = routeData.durationMinutes;
 
                     // Fetch real elevation profile from Open-Meteo
                     const elevationInfo = await fetchRealElevationData(pathCoords);
@@ -424,19 +423,42 @@
             }
         }
 
-        // Calculate 3-4 strategic intermediate waypoints to form realistic road loops
-        function calculateLoopWaypoints(startPoint, targetDistanceKm, mainAngle, variantIndex) {
+        // Helper to query OSRM routing service
+        async function fetchOSRMRoute(waypoints) {
+            const waypointsStr = waypoints.map(wp => `${wp[1].toFixed(6)},${wp[0].toFixed(6)}`).join(';');
+            const osrmUrl = `https://router.project-osrm.org/route/v1/bike/${waypointsStr}?overview=full&geometries=geojson`;
+
+            const response = await fetch(osrmUrl);
+            if (!response.ok) throw new Error("OSRM Routing API Error");
+            const data = await response.json();
+
+            if (!data.routes || data.routes.length === 0) {
+                throw new Error("No route found");
+            }
+
+            const osrmRoute = data.routes[0];
+            return {
+                coordinates: osrmRoute.geometry.coordinates.map(c => [c[1], c[0]]),
+                distanceKm: osrmRoute.distance / 1000,
+                durationMinutes: Math.round(osrmRoute.duration / 60)
+            };
+        }
+
+        // Calculate strategic intermediate waypoints calibrated for exact road target distances
+        function calculateLoopWaypoints(startPoint, targetDistanceKm, mainAngle, variantIndex, scaleFactor = 1.0) {
             const startLat = startPoint[0];
             const startLng = startPoint[1];
 
-            // Road distance is ~1.3x longer than straight-line radius
-            const approxRadiusKm = (targetDistanceKm / 5.2);
+            // Road circuity factor ~ 1.3x Euclidean distance.
+            // Perimeter for 3-4 inscribed waypoints is approx 6.28 * R.
+            // Calibrated base radius: targetDistance / (6.28 * 1.30) ≈ targetDistance / 8.16
+            const baseRadiusKm = (targetDistanceKm / 8.16) * scaleFactor;
             
             const latKm = 111;
             const lngKm = 111 * Math.cos(startLat * Math.PI / 180);
 
-            const latRadius = approxRadiusKm / latKm;
-            const lngRadius = approxRadiusKm / lngKm;
+            const latRadius = baseRadiusKm / latKm;
+            const lngRadius = baseRadiusKm / lngKm;
 
             // Center of the loop offset from start position
             const centerLat = startLat + latRadius * Math.cos(mainAngle);
@@ -445,24 +467,24 @@
             const waypoints = [[startLat, startLng]];
 
             if (variantIndex === 4) {
-                // Figure-8 pattern with central detour
+                // Figure-8 pattern with calibrated scaling
                 waypoints.push([
-                    centerLat + latRadius * 0.7 * Math.cos(mainAngle - 0.8),
-                    centerLng + lngRadius * 0.7 * Math.sin(mainAngle - 0.8)
+                    centerLat + latRadius * 0.7 * Math.cos(mainAngle - 1.2),
+                    centerLng + lngRadius * 0.7 * Math.sin(mainAngle - 1.2)
                 ]);
                 waypoints.push([
-                    centerLat + latRadius * 1.2 * Math.cos(mainAngle + 0.3),
-                    centerLng + lngRadius * 1.2 * Math.sin(mainAngle + 0.3)
+                    centerLat + latRadius * 1.1 * Math.cos(mainAngle + 0.2),
+                    centerLng + lngRadius * 1.1 * Math.sin(mainAngle + 0.2)
                 ]);
                 waypoints.push([
-                    centerLat + latRadius * 0.6 * Math.cos(mainAngle + 1.2),
-                    centerLng + lngRadius * 0.6 * Math.sin(mainAngle + 1.2)
+                    centerLat + latRadius * 0.7 * Math.cos(mainAngle + 1.5),
+                    centerLng + lngRadius * 0.7 * Math.sin(mainAngle + 1.5)
                 ]);
             } else {
                 // Standard directional loop
-                const angleOffsets = [-1.1, 0.2, 1.2];
+                const angleOffsets = [-1.2, 0.1, 1.3];
                 angleOffsets.forEach((offset, idx) => {
-                    const radiusMult = idx === 1 ? 1.15 : 0.85;
+                    const radiusMult = idx === 1 ? 1.1 : 0.9;
                     const wLat = centerLat + latRadius * radiusMult * Math.cos(mainAngle + offset);
                     const wLng = centerLng + lngRadius * radiusMult * Math.sin(mainAngle + offset);
                     waypoints.push([wLat, wLng]);
