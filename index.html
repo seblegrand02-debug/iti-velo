@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VéloRoute - Générateur d'Itinéraires</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for elevation profile -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #map { height: 100%; min-height: 400px; width: 100%; border-radius: 0.75rem; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-md">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="bg-emerald-500 text-slate-900 p-2.5 rounded-xl font-black text-xl shadow-lg">
+                    <i class="fa-solid fa-person-biking"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide text-white">VéloRoute <span class="text-emerald-400">Pro</span></h1>
+                    <p class="text-xs text-slate-400">Générateur & Exportateur d'itinéraires cyclistes</p>
+                </div>
+            </div>
+            <div class="text-xs bg-slate-700/50 border border-slate-600 px-3 py-1.5 rounded-full text-slate-300 hidden sm:flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                Localisation GPS Active
+            </div>
+        </div>
+    </header>
+
+    <!-- App Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Controls & Routes List Sidebar -->
+        <div class="lg:col-span-5 flex flex-col space-y-6">
+            
+            <!-- Distance & Generator Panel -->
+            <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl">
+                <h2 class="text-lg font-semibold mb-4 flex items-center text-white">
+                    <i class="fa-solid fa-sliders text-emerald-400 mr-2"></i> Configuration du parcours
+                </h2>
+                
+                <form id="generator-form" onsubmit="event.preventDefault(); generateRoutes();" class="space-y-4">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label for="distance" class="text-sm font-medium text-slate-300">Distance souhaitée (km)</label>
+                            <span id="distance-val" class="text-lg font-bold text-emerald-400">50 km</span>
+                        </div>
+                        <input type="range" id="distance" min="10" max="200" value="50" step="5"
+                            class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                            oninput="document.getElementById('distance-val').innerText = this.value + ' km'">
+                        <div class="flex justify-between text-xs text-slate-500 mt-1">
+                            <span>10 km</span>
+                            <span>100 km</span>
+                            <span>200 km</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Type de route</label>
+                            <select id="surface-type" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                                <option value="road">Route (Asphalte)</option>
+                                <option value="gravel">Gravel / Mixte</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Point de départ</label>
+                            <button type="button" onclick="getCurrentLocation()" class="w-full bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-location-crosshairs text-emerald-400"></i> Ma position
+                            </button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 Itinéraires
+                    </button>
+                </form>
+            </div>
+
+            <!-- List of 5 Generated Routes -->
+            <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl flex-1 flex flex-col min-h-[350px]">
+                <h2 class="text-lg font-semibold mb-3 flex items-center justify-between text-white">
+                    <span><i class="fa-solid fa-route text-emerald-400 mr-2"></i> Itinéraires Proposés</span>
+                    <span id="route-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">0/5</span>
+                </h2>
+
+                <div id="routes-container" class="space-y-3 overflow-y-auto max-h-[420px] pr-1 custom-scrollbar flex-1">
+                    <!-- Placeholder message -->
+                    <div id="routes-placeholder" class="text-center py-12 text-slate-500 flex flex-col items-center justify-center h-full">
+                        <i class="fa-solid fa-compass-drafting text-4xl mb-3 text-slate-600"></i>
+                        <p class="text-sm">Définissez une distance et cliquez sur "Générer" pour obtenir 5 boucles personnalisées.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Visualization Map & Export Panel -->
+        <div class="lg:col-span-7 flex flex-col space-y-6">
+            
+            <!-- Map Container -->
+            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-xl flex flex-col h-[450px]">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-md font-semibold text-white flex items-center">
+                        <i class="fa-solid fa-map-location-dot text-emerald-400 mr-2"></i> Aperçu Carte
+                    </h2>
+                    <span id="selected-route-name" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-3 py-1 rounded-full">
+                        Aucun itinéraire sélectionné
+                    </span>
+                </div>
+                <div id="map" class="z-10 flex-1"></div>
+            </div>
+
+            <!-- Profile & Export Section -->
+            <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl">
+                <!-- Elevation Chart -->
+                <div class="mb-5">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center">
+                        <i class="fa-solid fa-chart-area mr-1.5 text-emerald-400"></i> Profil d'Altimétrie
+                    </h3>
+                    <div class="h-28 w-full bg-slate-900/50 rounded-xl p-2 border border-slate-700/50">
+                        <canvas id="elevationChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Export Options -->
+                <div>
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                        Exporter le parcours sélectionné
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <!-- Direct GPX Download -->
+                        <button id="btn-gpx" onclick="exportGPX()" disabled class="disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow">
+                            <i class="fa-solid fa-file-arrow-down"></i> Télécharger GPX
+                        </button>
+
+                        <!-- Strava Export -->
+                        <button id="btn-strava" onclick="exportToStrava()" disabled class="disabled:opacity-40 disabled:cursor-not-allowed bg-[#FC4C02] hover:bg-[#e04300] text-white font-medium py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow">
+                            <i class="fa-brands fa-strava"></i> Ouvrir sur Strava
+                        </button>
+
+                        <!-- Garmin Connect Export -->
+                        <button id="btn-garmin" onclick="exportToGarmin()" disabled class="disabled:opacity-40 disabled:cursor-not-allowed bg-[#007CC3] hover:bg-[#0069a5] text-white font-medium py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-2 text-sm shadow">
+                            <i class="fa-solid fa-triangle-circle-square"></i> Garmin Connect
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Custom Modal Notification -->
+    <div id="modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <h3 id="modal-title" class="text-lg font-bold text-white mb-2">Notice</h3>
+            <p id="modal-body" class="text-sm text-slate-300 mb-6"></p>
+            <div class="flex justify-end gap-2">
+                <button onclick="closeModal()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-4 py-2 rounded-xl text-sm">
+                    Compris
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        // Global App State
+        let map;
+        let userLocation = [48.8566, 2.3522]; // Paris default coordinates
+        let generatedRoutes = [];
+        let selectedRoute = null;
+        let mapLayers = [];
+        let elevationChart = null;
+
+        // Route Theme Templates
+        const routeThemes = [
+            { name: "La Classique des Vallées", type: "Equilibré", color: "#10b981", elevationMult: 10, icon: "fa-mountain-sun" },
+            { name: "Boucle de Vélocité (Plat)", type: "Rapide", color: "#3b82f6", elevationMult: 4, icon: "fa-bolt" },
+            { name: "Défi Grimpette & Cols", type: "Moyenne Montagne", color: "#ef4444", elevationMult: 18, icon: "fa-volcano" },
+            { name: "Le Circuit Panoramique", type: "Pittoresque", color: "#f59e0b", elevationMult: 8, icon: "fa-camera" },
+            { name: "L'Aventure Gravel & Calme", type: "Tranquille", color: "#8b5cf6", elevationMult: 12, icon: "fa-tree" }
+        ];
+
+        // Initialize Map & Chart on DOM Ready
+        window.onload = function() {
+            initMap();
+            initChart();
+        };
+
+        function initMap() {
+            map = L.map('map').setView(userLocation, 11);
+            
+            // Dark Mode Tile Layer (CartoDB Dark Matter)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 19
+            }).addTo(map);
+
+            // User Location Marker
+            L.circleMarker(userLocation, {
+                radius: 8,
+                fillColor: "#10b981",
+                color: "#ffffff",
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.9
+            }).addTo(map).bindPopup("<b>Point de Départ / Arrivée</b>").openPopup();
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('elevationChart').getContext('2d');
+            elevationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Altitude (m)',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = [position.coords.latitude, position.coords.longitude];
+                        map.setView(userLocation, 12);
+                        
+                        // Clear previous location markers
+                        map.eachLayer((layer) => {
+                            if (layer instanceof L.CircleMarker) {
+                                map.removeLayer(layer);
+                            }
+                        });
+
+                        L.circleMarker(userLocation, {
+                            radius: 8,
+                            fillColor: "#10b981",
+                            color: "#ffffff",
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.9
+                        }).addTo(map).bindPopup("<b>Votre Position</b>").openPopup();
+
+                        showModal("Géolocalisation réussie", "Votre position actuelle a été définie comme point de départ.");
+                    },
+                    () => {
+                        showModal("Géolocalisation", "Impossible d'accéder à votre position. Utilisation de la position par défaut.");
+                    }
+                );
+            } else {
+                showModal("Erreur", "La géolocalisation n'est pas supportée par votre navigateur.");
+            }
+        }
+
+        // Generate 5 Distinct Routes based on Target Distance
+        function generateRoutes() {
+            const targetDistance = parseFloat(document.getElementById('distance').value);
+            const surfaceType = document.getElementById('surface-type').value;
+
+            generatedRoutes = [];
+            clearMapLayers();
+
+            // Generate 5 loops with different headings and characteristics
+            for (let i = 0; i < 5; i++) {
+                const theme = routeThemes[i];
+                const headingAngle = (i * 72) * (Math.PI / 180); // 360 / 5 = 72 degrees offset
+                
+                // Slight variations in distance (+/- 8%)
+                const actualDistance = targetDistance * (0.94 + Math.random() * 0.12);
+                const elevationGain = Math.round(actualDistance * theme.elevationMult);
+                
+                // Create geometry points
+                const pathCoords = generateLoopCoordinates(userLocation, actualDistance, headingAngle);
+                const elevationProfile = generateElevationProfile(actualDistance, elevationGain);
+
+                const route = {
+                    id: i + 1,
+                    name: theme.name,
+                    type: theme.type,
+                    surface: surfaceType === 'road' ? 'Asphalte' : 'Gravel / Mixte',
+                    distance: actualDistance.toFixed(1),
+                    elevationGain: elevationGain,
+                    estimatedTime: calculateTime(actualDistance, elevationGain),
+                    color: theme.color,
+                    icon: theme.icon,
+                    coordinates: pathCoords,
+                    elevationProfile: elevationProfile
+                };
+
+                generatedRoutes.push(route);
+            }
+
+            renderRouteCards();
+            selectRoute(1); // Select first route by default
+        }
+
+        // Mathematical helper to construct a loop geometry around origin
+        function generateLoopCoordinates(startPoint, distanceKm, angleOffset) {
+            const points = [];
+            const numPoints = 25; // Smooth loop
+            
+            // Calculate loop radius based on target perimeter
+            // Perimeter approx 2 * pi * r => r approx distanceKm / (2 * pi)
+            const radiusKm = distanceKm / 5.5; 
+            
+            // Convert radius to approx lat/lng offset (~111km per degree lat)
+            const latRadius = radiusKm / 111;
+            const lngRadius = radiusKm / (111 * Math.cos(startPoint[0] * Math.PI / 180));
+
+            // Center of the loop (offset from start point so start point is on the loop)
+            const centerLat = startPoint[0] + latRadius * Math.cos(angleOffset);
+            const centerLng = startPoint[1] + lngRadius * Math.sin(angleOffset);
+
+            for (let i = 0; i <= numPoints; i++) {
+                const angle = (i / numPoints) * 2 * Math.PI;
+                
+                // Add slight randomness for realistic curves
+                const noise = 1 + (Math.sin(i * 3) * 0.08); 
+                
+                const lat = centerLat - latRadius * Math.cos(angle + angleOffset) * noise;
+                const lng = centerLng - lngRadius * Math.sin(angle + angleOffset) * noise;
+                
+                points.push([lat, lng]);
+            }
+            
+            // Force start/end exact match
+            points[0] = [startPoint[0], startPoint[1]];
+            points[points.length - 1] = [startPoint[0], startPoint[1]];
+
+            return points;
+        }
+
+        function generateElevationProfile(distance, totalGain) {
+            const dataPoints = 20;
+            const profile = [];
+            let currentAlt = 120 + Math.random() * 50;
+
+            for (let i = 0; i < dataPoints; i++) {
+                profile.push(Math.round(currentAlt));
+                const delta = (Math.sin(i) * (totalGain / 10)) + (Math.random() * 15 - 5);
+                currentAlt = Math.max(50, currentAlt + delta);
+            }
+            return profile;
+        }
+
+        function calculateTime(distance, elevation) {
+            // Average speed ~24km/h on flat + 1h per 1000m elevation
+            const hours = (distance / 24) + (elevation / 1000);
+            const h = Math.floor(hours);
+            const m = Math.round((hours - h) * 60);
+            return `${h}h${m < 10 ? '0' : ''}${m}`;
+        }
+
+        function renderRouteCards() {
+            const container = document.getElementById('routes-container');
+            document.getElementById('route-count').innerText = `${generatedRoutes.length}/5`;
+            container.innerHTML = '';
+
+            generatedRoutes.forEach((route) => {
+                const card = document.createElement('div');
+                card.id = `route-card-${route.id}`;
+                card.onclick = () => selectRoute(route.id);
+                card.className = `p-4 rounded-xl border transition cursor-pointer flex flex-col justify-between space-y-3 bg-slate-800/80 hover:bg-slate-700/80 border-slate-700`;
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white" style="background-color: ${route.color}">
+                                <i class="fa-solid ${route.icon} text-sm"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-white text-sm leading-tight">${route.name}</h3>
+                                <span class="text-xs text-slate-400">${route.type} • ${route.surface}</span>
+                            </div>
+                        </div>
+                        <span class="text-xs font-bold text-slate-300 bg-slate-900/60 border border-slate-700 px-2 py-1 rounded-md">
+                            #${route.id}
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 pt-1 border-t border-slate-700/50 text-center">
+                        <div>
+                            <span class="block text-[10px] text-slate-400 uppercase">Distance</span>
+                            <span class="text-sm font-bold text-emerald-400">${route.distance} km</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] text-slate-400 uppercase">Dénivelé</span>
+                            <span class="text-sm font-bold text-slate-200">+${route.elevationGain}m</span>
+                        </div>
+                        <div>
+                            <span class="block text-[10px] text-slate-400 uppercase">Durée est.</span>
+                            <span class="text-sm font-bold text-slate-200">${route.estimatedTime}</span>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function selectRoute(routeId) {
+            selectedRoute = generatedRoutes.find(r => r.id === routeId);
+            if (!selectedRoute) return;
+
+            // Highlight UI Card
+            generatedRoutes.forEach(r => {
+                const card = document.getElementById(`route-card-${r.id}`);
+                if (card) {
+                    if (r.id === routeId) {
+                        card.className = "p-4 rounded-xl border-2 transition cursor-pointer flex flex-col justify-between space-y-3 bg-slate-700/90 border-emerald-500 shadow-lg";
+                    } else {
+                        card.className = "p-4 rounded-xl border transition cursor-pointer flex flex-col justify-between space-y-3 bg-slate-800/80 hover:bg-slate-700/50 border-slate-700 opacity-70";
+                    }
+                }
+            });
+
+            // Update map
+            clearMapLayers();
+            
+            // Draw route polyline
+            const polyline = L.polyline(selectedRoute.coordinates, {
+                color: selectedRoute.color,
+                weight: 5,
+                opacity: 0.9,
+                lineJoin: 'round'
+            }).addTo(map);
+
+            mapLayers.push(polyline);
+            map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+
+            // Update Header Name
+            document.getElementById('selected-route-name').innerText = `${selectedRoute.name} (${selectedRoute.distance} km)`;
+
+            // Update Chart
+            updateElevationChart(selectedRoute.elevationProfile);
+
+            // Enable Export Buttons
+            document.getElementById('btn-gpx').disabled = false;
+            document.getElementById('btn-strava').disabled = false;
+            document.getElementById('btn-garmin').disabled = false;
+        }
+
+        function clearMapLayers() {
+            mapLayers.forEach(layer => map.removeLayer(layer));
+            mapLayers = [];
+        }
+
+        function updateElevationChart(data) {
+            if (!elevationChart) return;
+            const labels = data.map((_, index) => `${Math.round((index / (data.length - 1)) * selectedRoute.distance)} km`);
+            
+            elevationChart.data.labels = labels;
+            elevationChart.data.datasets[0].data = data;
+            elevationChart.data.datasets[0].borderColor = selectedRoute.color;
+            elevationChart.update();
+        }
+
+        // ================= EXPORT LOGIC ================= //
+
+        function exportGPX() {
+            if (!selectedRoute) return;
+
+            // Construct GPX XML file content
+            let gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="VéloRoute Pro - https://veloroute.app" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata>
+    <name>${escapeXml(selectedRoute.name)}</name>
+    <desc>Itinéraire de ${selectedRoute.distance} km généré sur VéloRoute Pro</desc>
+  </metadata>
+  <trk>
+    <name>${escapeXml(selectedRoute.name)}</name>
+    <type>Cycling</type>
+    <trkseg>
+`;
+
+            selectedRoute.coordinates.forEach((pt, idx) => {
+                const ele = selectedRoute.elevationProfile[Math.floor((idx / selectedRoute.coordinates.length) * selectedRoute.elevationProfile.length)] || 100;
+                gpxContent += `      <trkpt lat="${pt[0]}" lon="${pt[1]}"><ele>${ele}</ele></trkpt>\n`;
+            });
+
+            gpxContent += `    </trkseg>\n  </trk>\n</gpx>`;
+
+            // Trigger Browser Download using Blob
+            const blob = new Blob([gpxContent], { type: 'application/gpx+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${selectedRoute.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${selectedRoute.distance}km.gpx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showModal("Export GPX Réussi", "Le fichier .GPX a été téléchargé dans votre navigateur. Vous pouvez maintenant l'importer dans votre compteur GPS.");
+        }
+
+        function exportToStrava() {
+            if (!selectedRoute) return;
+            // Direct user to Strava Route Builder / Upload page with instructions
+            const stravaUrl = "https://www.strava.com/routes/new";
+            showModal(
+                "Export vers Strava",
+                `Pour enregistrer cet itinéraire sur Strava :<br><br>
+                1. Téléchargez d'abord le fichier <b>GPX</b> via le bouton "Télécharger GPX".<br>
+                2. Cliquez sur continuer pour ouvrir le créateur d'itinéraires Strava.<br>
+                3. Cliquez sur l'icône de téléchargement dans Strava pour charger le fichier GPX.`,
+                () => window.open(stravaUrl, '_blank')
+            );
+        }
+
+        function exportToGarmin() {
+            if (!selectedRoute) return;
+            // Direct user to Garmin Connect Courses import
+            const garminUrl = "https://connect.garmin.com/modern/courses";
+            showModal(
+                "Export vers Garmin Connect",
+                `Pour envoyer ce parcours sur votre montre ou compteur Garmin :<br><br>
+                1. Téléchargez d'abord le fichier <b>GPX</b>.<br>
+                2. Rendez-vous sur Garmin Connect (Lien ci-dessous).<br>
+                3. Allez dans <b>Entraînement & Navigation &gt; Parcours</b> et sélectionnez <b>Importer</b>.`,
+                () => window.open(garminUrl, '_blank')
+            );
+        }
+
+        // Modal Helpers
+        function showModal(title, text, onConfirm = null) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-body').innerHTML = text;
+            const modal = document.getElementById('modal');
+            modal.classList.remove('hidden');
+            
+            if (onConfirm) {
+                window.pendingModalConfirm = onConfirm;
+            } else {
+                window.pendingModalConfirm = null;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            if (window.pendingModalConfirm) {
+                window.pendingModalConfirm();
+                window.pendingModalConfirm = null;
+            }
+        }
+
+        function escapeXml(unsafe) {
+            return unsafe.replace(/[<>&'"]/g, function (c) {
+                switch (c) {
+                    case '<': return '&lt;';
+                    case '>': return '&gt;';
+                    case '&': return '&amp;';
+                    case '\'': return '&apos;';
+                    case '"': return '&quot;';
+                }
+            });
+        }
+    </script>
+</body>
+</html>
