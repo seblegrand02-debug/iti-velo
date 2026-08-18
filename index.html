@@ -103,8 +103,8 @@
                         </div>
                     </div>
 
-                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 Itinéraires
+                    <button type="submit" id="generate-btn" class="w-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 Itinéraires Réels
                     </button>
                 </form>
             </div>
@@ -207,13 +207,13 @@
         let mapLayers = [];
         let elevationChart = null;
 
-        // Route Theme Templates
+        // Route Theme Templates & Directions
         const routeThemes = [
-            { name: "La Classique des Vallées", type: "Equilibré", color: "#10b981", elevationMult: 10, icon: "fa-mountain-sun" },
-            { name: "Boucle de Vélocité (Plat)", type: "Rapide", color: "#3b82f6", elevationMult: 4, icon: "fa-bolt" },
-            { name: "Défi Grimpette & Cols", type: "Moyenne Montagne", color: "#ef4444", elevationMult: 18, icon: "fa-volcano" },
-            { name: "Le Circuit Panoramique", type: "Pittoresque", color: "#f59e0b", elevationMult: 8, icon: "fa-camera" },
-            { name: "L'Aventure Gravel & Calme", type: "Tranquille", color: "#8b5cf6", elevationMult: 12, icon: "fa-tree" }
+            { name: "Boucle Nord & Vallées", type: "Nord / Équilibré", color: "#10b981", icon: "fa-compass" },
+            { name: "Circuit Est & Bocages", type: "Est / Rapide", color: "#3b82f6", icon: "fa-bolt" },
+            { name: "Traversée Sud & Reliefs", type: "Sud / Sportif", color: "#ef4444", icon: "fa-mountain" },
+            { name: "Méandre Ouest & Panoramas", type: "Ouest / Pittoresque", color: "#f59e0b", icon: "fa-camera" },
+            { name: "Grand Tour Huit-Inversé", type: "Sinteux & Varié", color: "#8b5cf6", icon: "fa-route" }
         ];
 
         // Initialize Map & Chart on DOM Ready
@@ -239,6 +239,34 @@
                 const lat = e.latlng.lat;
                 const lng = e.latlng.lng;
                 setStartLocation(lat, lng, `Point sur carte (${lat.toFixed(3)}, ${lng.toFixed(3)})`);
+            });
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('elevationChart').getContext('2d');
+            elevationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Altitude (m)',
+                        data: [],
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        fill: true,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { display: false } },
+                        y: { display: true, ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: '#334155' } }
+                    }
+                }
             });
         }
 
@@ -309,102 +337,189 @@
             }
         }
 
-        // Generate 5 Distinct Routes based on Target Distance
-        function generateRoutes() {
+        // Generate 5 Distinct Real Road Routes based on Target Distance using OpenStreetMap Routing
+        async function generateRoutes() {
             const targetDistance = parseFloat(document.getElementById('distance').value);
             const surfaceType = document.getElementById('surface-type').value;
+
+            const btn = document.getElementById('generate-btn');
+            const placeholder = document.getElementById('routes-placeholder');
+            const originalBtnHtml = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Calcul du réseau routier...`;
+
+            if (placeholder) {
+                placeholder.innerHTML = `
+                    <div class="p-6 text-center">
+                        <i class="fa-solid fa-spinner animate-spin text-4xl mb-3 text-emerald-400"></i>
+                        <p class="text-sm font-semibold text-slate-200">Génération d'itinéraires réels via OpenStreetMap...</p>
+                        <p class="text-xs text-slate-400 mt-1">Analyse du réseau routier et récupération des données altimétriques...</p>
+                    </div>
+                `;
+            }
 
             generatedRoutes = [];
             clearMapLayers();
 
-            // Generate 5 loops with different headings and characteristics
-            for (let i = 0; i < 5; i++) {
-                const theme = routeThemes[i];
-                const headingAngle = (i * 72) * (Math.PI / 180); // 360 / 5 = 72 degrees offset
-                
-                // Slight variations in distance (+/- 8%)
-                const actualDistance = targetDistance * (0.94 + Math.random() * 0.12);
-                const elevationGain = Math.round(actualDistance * theme.elevationMult);
-                
-                // Create geometry points
-                const pathCoords = generateLoopCoordinates(userLocation, actualDistance, headingAngle);
-                const elevationProfile = generateElevationProfile(actualDistance, elevationGain);
+            // Distinct directional bearings for 5 distinct loop orientations
+            const bearings = [
+                0,                  // 0° (North)
+                Math.PI / 2.5,      // ~72° (East-North-East)
+                Math.PI,            // 180° (South)
+                Math.PI * 1.35,     // ~243° (South-West)
+                Math.PI * 1.75      // ~315° (North-West)
+            ];
 
-                const route = {
-                    id: i + 1,
-                    name: theme.name,
-                    type: theme.type,
-                    surface: surfaceType === 'road' ? 'Asphalte' : 'Gravel / Mixte',
-                    distance: actualDistance.toFixed(1),
-                    elevationGain: elevationGain,
-                    estimatedTime: calculateTime(actualDistance, elevationGain),
-                    color: theme.color,
-                    icon: theme.icon,
-                    coordinates: pathCoords,
-                    elevationProfile: elevationProfile
-                };
+            try {
+                const routePromises = bearings.map(async (bearing, index) => {
+                    const theme = routeThemes[index];
+                    const waypoints = calculateLoopWaypoints(userLocation, targetDistance, bearing, index);
+                    
+                    // Format waypoints string: lon,lat;lon,lat;...
+                    const waypointsStr = waypoints.map(wp => `${wp[1].toFixed(6)},${wp[0].toFixed(6)}`).join(';');
+                    const osrmUrl = `https://router.project-osrm.org/route/v1/bike/${waypointsStr}?overview=full&geometries=geojson`;
 
-                generatedRoutes.push(route);
+                    const response = await fetch(osrmUrl);
+                    if (!response.ok) throw new Error("OSRM Routing API Error");
+                    const data = await response.json();
+
+                    if (!data.routes || data.routes.length === 0) {
+                        throw new Error("No route found");
+                    }
+
+                    const osrmRoute = data.routes[0];
+                    // Convert [lon, lat] from OSRM to Leaflet [lat, lon]
+                    const pathCoords = osrmRoute.geometry.coordinates.map(c => [c[1], c[0]]);
+                    const actualDistanceKm = (osrmRoute.distance / 1000).toFixed(1);
+                    const durationMinutes = Math.round(osrmRoute.duration / 60);
+
+                    // Fetch real elevation profile from Open-Meteo
+                    const elevationInfo = await fetchRealElevationData(pathCoords);
+
+                    return {
+                        id: index + 1,
+                        name: theme.name,
+                        type: theme.type,
+                        surface: surfaceType === 'road' ? 'Asphalte / Route' : 'Gravel / Mixte',
+                        distance: actualDistanceKm,
+                        elevationGain: elevationInfo.gain,
+                        estimatedTime: formatDuration(durationMinutes),
+                        color: theme.color,
+                        icon: theme.icon,
+                        coordinates: pathCoords,
+                        elevationProfile: elevationInfo.profile
+                    };
+                });
+
+                generatedRoutes = await Promise.all(routePromises);
+                renderRouteCards();
+                selectRoute(1);
+            } catch (err) {
+                console.error("Erreur lors de la génération des routes:", err);
+                showModal("Erreur de routage", "Impossible de contacter le service de routage routier. Veuillez réessayer dans quelques instants ou changer la localisation.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalBtnHtml;
             }
-
-            renderRouteCards();
-            selectRoute(1); // Select first route by default
         }
 
-        // Mathematical helper to construct a loop geometry around origin
-        function generateLoopCoordinates(startPoint, distanceKm, angleOffset) {
-            const points = [];
-            const numPoints = 25; // Smooth loop
-            
-            // Calculate loop radius based on target perimeter
-            // Perimeter approx 2 * pi * r => r approx distanceKm / (2 * pi)
-            const radiusKm = distanceKm / 5.5; 
-            
-            // Convert radius to approx lat/lng offset (~111km per degree lat)
-            const latRadius = radiusKm / 111;
-            const lngRadius = radiusKm / (111 * Math.cos(startPoint[0] * Math.PI / 180));
+        // Calculate 3-4 strategic intermediate waypoints to form realistic road loops
+        function calculateLoopWaypoints(startPoint, targetDistanceKm, mainAngle, variantIndex) {
+            const startLat = startPoint[0];
+            const startLng = startPoint[1];
 
-            // Center of the loop (offset from start point so start point is on the loop)
-            const centerLat = startPoint[0] + latRadius * Math.cos(angleOffset);
-            const centerLng = startPoint[1] + lngRadius * Math.sin(angleOffset);
+            // Road distance is ~1.3x longer than straight-line radius
+            const approxRadiusKm = (targetDistanceKm / 5.2);
+            
+            const latKm = 111;
+            const lngKm = 111 * Math.cos(startLat * Math.PI / 180);
 
-            for (let i = 0; i <= numPoints; i++) {
-                const angle = (i / numPoints) * 2 * Math.PI;
-                
-                // Add slight randomness for realistic curves
-                const noise = 1 + (Math.sin(i * 3) * 0.08); 
-                
-                const lat = centerLat - latRadius * Math.cos(angle + angleOffset) * noise;
-                const lng = centerLng - lngRadius * Math.sin(angle + angleOffset) * noise;
-                
-                points.push([lat, lng]);
+            const latRadius = approxRadiusKm / latKm;
+            const lngRadius = approxRadiusKm / lngKm;
+
+            // Center of the loop offset from start position
+            const centerLat = startLat + latRadius * Math.cos(mainAngle);
+            const centerLng = startLng + lngRadius * Math.sin(mainAngle);
+
+            const waypoints = [[startLat, startLng]];
+
+            if (variantIndex === 4) {
+                // Figure-8 pattern with central detour
+                waypoints.push([
+                    centerLat + latRadius * 0.7 * Math.cos(mainAngle - 0.8),
+                    centerLng + lngRadius * 0.7 * Math.sin(mainAngle - 0.8)
+                ]);
+                waypoints.push([
+                    centerLat + latRadius * 1.2 * Math.cos(mainAngle + 0.3),
+                    centerLng + lngRadius * 1.2 * Math.sin(mainAngle + 0.3)
+                ]);
+                waypoints.push([
+                    centerLat + latRadius * 0.6 * Math.cos(mainAngle + 1.2),
+                    centerLng + lngRadius * 0.6 * Math.sin(mainAngle + 1.2)
+                ]);
+            } else {
+                // Standard directional loop
+                const angleOffsets = [-1.1, 0.2, 1.2];
+                angleOffsets.forEach((offset, idx) => {
+                    const radiusMult = idx === 1 ? 1.15 : 0.85;
+                    const wLat = centerLat + latRadius * radiusMult * Math.cos(mainAngle + offset);
+                    const wLng = centerLng + lngRadius * radiusMult * Math.sin(mainAngle + offset);
+                    waypoints.push([wLat, wLng]);
+                });
             }
-            
-            // Force start/end exact match
-            points[0] = [startPoint[0], startPoint[1]];
-            points[points.length - 1] = [startPoint[0], startPoint[1]];
 
-            return points;
+            // Always close the loop back at origin
+            waypoints.push([startLat, startLng]);
+            return waypoints;
         }
 
-        function generateElevationProfile(distance, totalGain) {
-            const dataPoints = 20;
-            const profile = [];
-            let currentAlt = 120 + Math.random() * 50;
+        async function fetchRealElevationData(pathCoords) {
+            // Sample 20 evenly-spaced coordinates along the real road path
+            const sampleCount = 20;
+            const step = Math.max(1, Math.floor(pathCoords.length / sampleCount));
+            const sampled = [];
 
-            for (let i = 0; i < dataPoints; i++) {
-                profile.push(Math.round(currentAlt));
-                const delta = (Math.sin(i) * (totalGain / 10)) + (Math.random() * 15 - 5);
-                currentAlt = Math.max(50, currentAlt + delta);
+            for (let i = 0; i < pathCoords.length; i += step) {
+                sampled.push(pathCoords[i]);
             }
-            return profile;
+            if (sampled[sampled.length - 1] !== pathCoords[pathCoords.length - 1]) {
+                sampled.push(pathCoords[pathCoords.length - 1]);
+            }
+
+            const lats = sampled.map(p => p[0].toFixed(5)).join(',');
+            const lons = sampled.map(p => p[1].toFixed(5)).join(',');
+
+            try {
+                const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("Elevation API Error");
+                const data = await res.json();
+
+                if (data.elevation && Array.isArray(data.elevation)) {
+                    let totalGain = 0;
+                    for (let i = 1; i < data.elevation.length; i++) {
+                        const diff = data.elevation[i] - data.elevation[i - 1];
+                        if (diff > 0) totalGain += diff;
+                    }
+                    return {
+                        gain: Math.round(totalGain),
+                        profile: data.elevation.map(e => Math.round(e))
+                    };
+                }
+            } catch (err) {
+                console.warn("Utilisation de l'altimétrie de secours:", err);
+            }
+
+            // Fallback synthetic elevation if API unreachable
+            const fallbackGain = Math.round(pathCoords.length * 0.35 + Math.random() * 80);
+            const fallbackProfile = sampled.map((_, idx) => Math.round(120 + Math.sin(idx * 0.5) * 40 + idx * 2));
+            return { gain: fallbackGain, profile: fallbackProfile };
         }
 
-        function calculateTime(distance, elevation) {
-            // Average speed ~24km/h on flat + 1h per 1000m elevation
-            const hours = (distance / 24) + (elevation / 1000);
-            const h = Math.floor(hours);
-            const m = Math.round((hours - h) * 60);
+        function formatDuration(totalMinutes) {
+            const h = Math.floor(totalMinutes / 60);
+            const m = totalMinutes % 60;
             return `${h}h${m < 10 ? '0' : ''}${m}`;
         }
 
@@ -422,7 +537,7 @@
                 card.innerHTML = `
                     <div class="flex justify-between items-start">
                         <div class="flex items-center gap-2.5">
-                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white" style="background-color: ${route.color}">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white shadow" style="background-color: ${route.color}">
                                 <i class="fa-solid ${route.icon} text-sm"></i>
                             </div>
                             <div>
@@ -437,11 +552,11 @@
 
                     <div class="grid grid-cols-3 gap-2 pt-1 border-t border-slate-700/50 text-center">
                         <div>
-                            <span class="block text-[10px] text-slate-400 uppercase">Distance</span>
+                            <span class="block text-[10px] text-slate-400 uppercase">Distance Réelle</span>
                             <span class="text-sm font-bold text-emerald-400">${route.distance} km</span>
                         </div>
                         <div>
-                            <span class="block text-[10px] text-slate-400 uppercase">Dénivelé</span>
+                            <span class="block text-[10px] text-slate-400 uppercase">Dénivelé D+</span>
                             <span class="text-sm font-bold text-slate-200">+${route.elevationGain}m</span>
                         </div>
                         <div>
@@ -473,7 +588,7 @@
             // Update map
             clearMapLayers();
             
-            // Draw route polyline
+            // Draw route polyline with glow shadow
             const polyline = L.polyline(selectedRoute.coordinates, {
                 color: selectedRoute.color,
                 weight: 5,
@@ -508,6 +623,7 @@
             elevationChart.data.labels = labels;
             elevationChart.data.datasets[0].data = data;
             elevationChart.data.datasets[0].borderColor = selectedRoute.color;
+            elevationChart.data.datasets[0].backgroundColor = `${selectedRoute.color}25`;
             elevationChart.update();
         }
 
@@ -521,7 +637,7 @@
 <gpx version="1.1" creator="VéloRoute Pro - https://veloroute.app" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>${escapeXml(selectedRoute.name)}</name>
-    <desc>Itinéraire de ${selectedRoute.distance} km généré sur VéloRoute Pro</desc>
+    <desc>Itinéraire de ${selectedRoute.distance} km généré sur routes réelles avec VéloRoute Pro</desc>
   </metadata>
   <trk>
     <name>${escapeXml(selectedRoute.name)}</name>
@@ -547,33 +663,31 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showModal("Export GPX Réussi", "Le fichier .GPX a été téléchargé dans votre navigateur. Vous pouvez maintenant l'importer dans votre compteur GPS.");
+            showModal("Export GPX Réussi", "Le fichier .GPX a été téléchargé dans votre navigateur. Vous pouvez maintenant l'importer sur votre compteur GPS (Garmin, Wahoo, Bryton) ou votre application mobile.");
         }
 
         function exportToStrava() {
             if (!selectedRoute) return;
-            // Direct user to Strava Route Builder / Upload page with instructions
             const stravaUrl = "https://www.strava.com/routes/new";
             showModal(
                 "Export vers Strava",
-                `Pour enregistrer cet itinéraire sur Strava :<br><br>
+                `Pour enregistrer cet itinéraire réel sur Strava :<br><br>
                 1. Téléchargez d'abord le fichier <b>GPX</b> via le bouton "Télécharger GPX".<br>
-                2. Cliquez sur continuer pour ouvrir le créateur d'itinéraires Strava.<br>
-                3. Cliquez sur l'icône de téléchargement dans Strava pour charger le fichier GPX.`,
+                2. Cliquez sur le bouton ci-dessous pour ouvrir l'outil d'itinéraires Strava.<br>
+                3. Importez le fichier GPX téléchargé dans Strava.`,
                 () => window.open(stravaUrl, '_blank')
             );
         }
 
         function exportToGarmin() {
             if (!selectedRoute) return;
-            // Direct user to Garmin Connect Courses import
             const garminUrl = "https://connect.garmin.com/modern/courses";
             showModal(
                 "Export vers Garmin Connect",
-                `Pour envoyer ce parcours sur votre montre ou compteur Garmin :<br><br>
+                `Pour envoyer ce parcours sur votre compteur ou montre Garmin :<br><br>
                 1. Téléchargez d'abord le fichier <b>GPX</b>.<br>
-                2. Rendez-vous sur Garmin Connect (Lien ci-dessous).<br>
-                3. Allez dans <b>Entraînement & Navigation &gt; Parcours</b> et sélectionnez <b>Importer</b>.`,
+                2. Rendez-vous sur Garmin Connect via le lien ci-dessous.<br>
+                3. Allez dans <b>Entraînement & Navigation &gt; Parcours</b> et cliquez sur <b>Importer</b>.`,
                 () => window.open(garminUrl, '_blank')
             );
         }
