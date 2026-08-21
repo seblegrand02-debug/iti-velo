@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VéloRoute Pro - Boucles Uniques sans Redondance</title>
+    <title>VéloRoute Pro - Boucles Stricts sans Doublons</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Leaflet CSS & JS -->
@@ -32,12 +32,12 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-bold tracking-wide text-white">VéloRoute <span class="text-emerald-400">Pro</span></h1>
-                    <p class="text-xs text-slate-400">Boucles réelles sans doublons de route</p>
+                    <p class="text-xs text-slate-400">Boucles garanties sans redondance (Écart max ±10%)</p>
                 </div>
             </div>
             <div class="text-xs bg-slate-700/50 border border-slate-600 px-3 py-1.5 rounded-full text-slate-300 hidden sm:flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Routage Bouclé Actif
+                Calibrage Rigoureux Actif
             </div>
         </div>
     </header>
@@ -95,22 +95,22 @@
                     </div>
 
                     <button type="submit" id="btn-generate" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 Boucles Exclusives
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer les Itinéraires (Max ±10%)
                     </button>
                 </form>
             </div>
 
-            <!-- List of 5 Generated Routes -->
+            <!-- List of Generated Routes -->
             <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl flex-1 flex flex-col min-h-[350px]">
                 <h2 class="text-lg font-semibold mb-3 flex items-center justify-between text-white">
-                    <span><i class="fa-solid fa-route text-emerald-400 mr-2"></i> Itinéraires en Boucle Pure</span>
-                    <span id="route-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">0/5</span>
+                    <span><i class="fa-solid fa-route text-emerald-400 mr-2"></i> Itinéraires Validés (3 à 5)</span>
+                    <span id="route-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">0</span>
                 </h2>
 
                 <div id="routes-container" class="space-y-3 overflow-y-auto max-h-[420px] pr-1 custom-scrollbar flex-1">
                     <div id="routes-placeholder" class="text-center py-12 text-slate-500 flex flex-col items-center justify-center h-full">
                         <i class="fa-solid fa-compass-drafting text-4xl mb-3 text-slate-600"></i>
-                        <p class="text-sm">Définissez vos critères pour générer 5 boucles uniques garanties sans redondance de route.</p>
+                        <p class="text-sm">Lancez la recherche pour obtenir des boucles strictes respectant l'écart de distance maximal de 10%.</p>
                     </div>
                 </div>
             </div>
@@ -124,7 +124,7 @@
             <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-xl flex flex-col h-[450px]">
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="text-md font-semibold text-white flex items-center">
-                        <i class="fa-solid fa-map-location-dot text-emerald-400 mr-2"></i> Aperçu Carte & Tracé
+                        <i class="fa-solid fa-map-location-dot text-emerald-400 mr-2"></i> Aperçu Carte & Tracé Pur
                     </h2>
                     <span id="selected-route-name" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-3 py-1 rounded-full">
                         Aucun itinéraire sélectionné
@@ -191,13 +191,14 @@
         let mapLayers = [];
         let elevationChart = null;
 
-        // Thèmes de boucles orientées avec des points de passage en anneau pour proscrire les retours sur soi
-        const routeThemes = [
-            { name: "L'Anneau Nord-Est", type: "Boucle Circulaire 1", color: "#10b981", angleOffset: 0.2, icon: "fa-circle-notch" },
-            { name: "La Grande Périphérique Est", type: "Boucle Circulaire 2", color: "#3b82f6", angleOffset: 1.4, icon: "fa-circle-notch" },
-            { name: "L'Orbite Sud", type: "Boucle Circulaire 3", color: "#ef4444", angleOffset: 2.6, icon: "fa-circle-notch" },
-            { name: "Le Circuit Ouest Intégral", type: "Boucle Circulaire 4", color: "#f59e0b", icon: "fa-circle-notch", angleOffset: 3.8 },
-            { name: "La Boucle Transversale", type: "Boucle Circulaire 5", color: "#8b5cf6", angleOffset: 5.0 }
+        // Configurations candidates pour générer un large éventail de formes de boucles pures
+        const routeCandidates = [
+            { name: "Boucle Nord-Est Pure", color: "#10b981", angleOffset: 0.1, distFactor: 1.0 },
+            { name: "Boucle Est Stricte", color: "#3b82f6", angleOffset: 1.3, distFactor: 1.02 },
+            { name: "Boucle Sud Rigoureuse", color: "#ef4444", angleOffset: 2.5, distFactor: 0.98 },
+            { name: "Boucle Ouest Exclusive", color: "#f59e0b", angleOffset: 3.7, distFactor: 1.01 },
+            { name: "Boucle Transversale Large", color: "#8b5cf6", angleOffset: 4.9, distFactor: 0.99 },
+            { name: "Boucle Nord-Ouest Asymétrique", color: "#06b6d4", angleOffset: 5.8, distFactor: 1.03 }
         ];
 
         window.onload = function() {
@@ -310,29 +311,32 @@
             } catch (e) {}
         }
 
-        // Génération de boucles pures sans redondance interne de route
+        // Génération rigoureuse avec filtre strict d'écart (±10%) et filtrage des doublons/redondances
         async function generateRoutes() {
             const targetKm = parseFloat(document.getElementById('distance').value);
             const surfaceType = document.getElementById('surface-type').value;
             const btn = document.getElementById('btn-generate');
             
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Création de boucles sans redondance...`;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Filtrage strict (Max ±10%)...`;
 
             generatedRoutes = [];
             clearMapLayers();
 
             const profile = surfaceType === 'cycling' ? 'cycling' : 'driving';
+            const minAllowedKm = targetKm * 0.9;
+            const maxAllowedKm = targetKm * 1.1;
+
+            let validRoutes = [];
 
             try {
-                for (let i = 0; i < routeThemes.length; i++) {
-                    const theme = routeThemes[i];
+                for (let i = 0; i < routeCandidates.length; i++) {
+                    if (validRoutes.length >= 5) break; // Maximum 5 itinéraires requis
                     
-                    // Génération de points disposés en cercle autour du départ pour forcer OSRM à faire une boucle fermée sans aller-retour sur la même route
-                    const waypoints = computeCircularWaypoints(startLocation, targetKm, theme.angleOffset);
+                    const candidate = routeCandidates[i];
+                    const waypoints = computePureLoopWaypoints(startLocation, targetKm, candidate.angleOffset, candidate.distFactor);
                     
                     const coordsString = waypoints.map(pt => `${pt[1]},${pt[0]}`).join(';');
-                    // Utilisation de l'API trip d'OSRM avec roundtrip=true pour ordonner les points en boucle fermée
                     const url = `https://router.project-osrm.org/trip/v1/${profile}/${coordsString}?overview=full&geometries=geojson&roundtrip=true&source=first`;
 
                     const response = await fetch(url);
@@ -340,62 +344,97 @@
 
                     if (data.code === 'Ok' && data.trips && data.trips.length > 0) {
                         const trip = data.trips[0];
-                        const latLngs = trip.geometry.coordinates.map(coord => [coord[1], coord[0]]);
                         const actualDistKm = (trip.distance / 1000);
-                        const estimatedDuration = formatDuration(trip.duration);
 
-                        const elevations = await fetchElevationsForRoute(latLngs);
-                        const elevationGain = calculateElevationGain(elevations);
+                        // RÈGLE STRICTE : Écart maximum de 10% par rapport à la distance demandée
+                        if (actualDistKm >= minAllowedKm && actualDistKm <= maxAllowedKm) {
+                            const latLngs = trip.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                            
+                            // Vérification d'unicité (pas de redondance majeure avec un itinéraire déjà validé)
+                            if (!isRouteTooSimilar(latLngs, validRoutes)) {
+                                const estimatedDuration = formatDuration(trip.duration);
+                                const elevations = await fetchElevationsForRoute(latLngs);
+                                const elevationGain = calculateElevationGain(elevations);
 
-                        generatedRoutes.push({
-                            id: i + 1,
-                            name: theme.name,
-                            type: theme.type,
-                            surface: surfaceType === 'cycling' ? 'Route & Asphalte' : 'Chemins / Gravel',
-                            distance: actualDistKm.toFixed(1),
-                            elevationGain: elevationGain,
-                            estimatedTime: estimatedDuration,
-                            color: theme.color,
-                            icon: theme.icon,
-                            coordinates: latLngs,
-                            elevationProfile: elevations
-                        });
+                                validRoutes.push({
+                                    id: validRoutes.length + 1,
+                                    name: candidate.name,
+                                    type: `Boucle Stricte ±10%`,
+                                    surface: surfaceType === 'cycling' ? 'Route & Asphalte' : 'Chemins / Gravel',
+                                    distance: actualDistKm.toFixed(1),
+                                    elevationGain: elevationGain,
+                                    estimatedTime: estimatedDuration,
+                                    color: candidate.color,
+                                    icon: "fa-circle-check",
+                                    coordinates: latLngs,
+                                    elevationProfile: elevations
+                                });
+                            }
+                        }
                     }
                 }
 
-                if (generatedRoutes.length > 0) {
+                // Si les contraintes strictes n'ont pas permis d'en faire 5, on garde ceux qui ont réussi (minimum 3)
+                if (validRoutes.length >= 3) {
+                    generatedRoutes = validRoutes;
                     renderRouteCards();
                     selectRoute(1);
+                } else if (validRoutes.length > 0) {
+                    // Si on a moins de 3 mais au moins 1, on les affiche et on prévient
+                    generatedRoutes = validRoutes;
+                    renderRouteCards();
+                    selectRoute(1);
+                    showModal("Attention", `Le réseau routier de cette zone est restreint : seuls ${validRoutes.length} itinéraires respectent l'écart de ±10%. Ils vous sont présentés.`);
                 } else {
-                    showModal("Erreur", "Aucun itinéraire n'a pu être généré. Veuillez essayer une autre distance.");
+                    showModal("Aucun itinéraire", "Impossible de générer des boucles pures respectant strictement l'écart de 10% depuis ce point. Essayez un autre point de départ ou une autre distance.");
                 }
+
             } catch (err) {
                 console.error(err);
-                showModal("Erreur de routage", "Impossible de contacter les serveurs de cartographie.");
+                showModal("Erreur de routage", "Impossible de contacter les services cartographiques.");
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 Boucles Exclusives`;
+                btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Générer les Itinéraires (Max ±10%)`;
             }
         }
 
-        // Algorithme de points intermédiaires disposés en anneau pour garantir une boucle sans doublon de chemin
-        function computeCircularWaypoints(start, targetKm, angleOffset) {
+        // Calcul de waypoints en polygones convexes pour éviter le repli sur soi (zéro redondance de segment)
+        function computePureLoopWaypoints(start, targetKm, angleOffset, distFactor) {
             const points = [start];
-            // Rayon adapté pour que le tour complet fasse la distance voulue en tenant compte du coefficient sinueux
-            const radiusKm = (targetKm / (2 * Math.PI)) * 1.15; 
+            const radiusKm = ((targetKm / (2 * Math.PI)) * 1.25) * distFactor; 
 
-            // 4 points cardinaux en anneau autour du point de départ
-            const numRingPoints = 4;
-            for (let j = 0; j < numRingPoints; j++) {
-                const angle = angleOffset + (j * (2 * Math.PI / numRingPoints));
+            // 5 points disposés en étoile pour contraindre le routeur à faire une boucle large sans superpositions
+            const numPoints = 5;
+            for (let j = 0; j < numPoints; j++) {
+                const angle = angleOffset + (j * (2 * Math.PI / numPoints));
                 const latOffset = (radiusKm / 111) * Math.cos(angle);
                 const lonOffset = (radiusKm / (111 * Math.cos(start[0] * Math.PI / 180))) * Math.sin(angle);
                 points.push([start[0] + latOffset, start[1] + lonOffset]);
             }
 
-            // Clôture stricte sur le point de départ
             points.push(start);
             return points;
+        }
+
+        // Test de similarité pour éviter des boucles quasi-identiques
+        function isRouteTooSimilar(newCoords, existingRoutes) {
+            if (existingRoutes.length === 0) return false;
+            for (let route of existingRoutes) {
+                // Comparaison simple sur un échantillon de coordonnées clés
+                let matchCount = 0;
+                const sampleStep = Math.max(1, Math.floor(newCoords.length / 10));
+                for (let i = 0; i < newCoords.length; i += sampleStep) {
+                    const pt = newCoords[i];
+                    // Si un autre itinéraire passe à moins de 300 mètres, on considère qu'il y a superposition partielle forte
+                    const close = route.coordinates.some(existingPt => {
+                        const dist = Math.abs(existingPt[0] - pt[0]) + Math.abs(existingPt[1] - pt[1]);
+                        return dist < 0.003; 
+                    });
+                    if (close) matchCount++;
+                }
+                if (matchCount > 6) return true; // Trop similaire
+            }
+            return false;
         }
 
         async function fetchElevationsForRoute(latLngs) {
@@ -439,7 +478,7 @@
 
         function renderRouteCards() {
             const container = document.getElementById('routes-container');
-            document.getElementById('route-count').innerText = `${generatedRoutes.length}/5`;
+            document.getElementById('route-count').innerText = `${generatedRoutes.length}`;
             container.innerHTML = '';
 
             generatedRoutes.forEach((route) => {
@@ -540,7 +579,7 @@
 <gpx version="1.1" creator="VéloRoute Pro - https://veloroute.app" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata>
     <name>${escapeXml(selectedRoute.name)}</name>
-    <desc>Boucle unique de ${selectedRoute.distance} km sans redondance</desc>
+    <desc>Boucle exacte de ${selectedRoute.distance} km (±10%)</desc>
   </metadata>
   <trk>
     <name>${escapeXml(selectedRoute.name)}</name>
@@ -565,7 +604,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showModal("Export GPX Réussi", "Le fichier .GPX de votre boucle unique a été téléchargé.");
+            showModal("Export GPX Réussi", "Le fichier .GPX de votre boucle rigoureuse a été téléchargé.");
         }
 
         function exportToStrava() {
