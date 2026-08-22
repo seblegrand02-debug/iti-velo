@@ -350,7 +350,6 @@
                     const theme = routeThemes[i];
 
                     try {
-                        // ESPACEMENT PROPORTIONNEL : 2 à 3 waypoints intermédiaires réguliers pour éviter les zigzags et allers-retours
                         const waypoints = getCleanLoopWaypoints(startLocation, currentRadius, theme.rotationOffset, targetKm);
                         const coordsString = waypoints.map(pt => `${pt[1]},${pt[0]}`).join(';');
                         const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsString}?overview=full&geometries=geojson`;
@@ -361,13 +360,11 @@
                         if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
                             let latLngs = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
                             
-                            // IMPOSE LE DÉPART ET L'ARRIVÉE EXACTS SUR startLocation
                             latLngs[0] = [startLocation[0], startLocation[1]];
                             latLngs[latLngs.length - 1] = [startLocation[0], startLocation[1]];
 
                             let actualDistKm = calculateRouteDistance(latLngs);
 
-                            // RÈGLE : Minimum -15% vers le bas, mais AUCUNE LIMITE vers le haut
                             const minAllowed = targetKm * 0.85;
                             if (actualDistKm >= minAllowed) {
                                 const isDuplicate = collectedRoutes.some(r => Math.abs(r.distance - actualDistKm) < 1.0);
@@ -428,10 +425,7 @@
 
         function getCleanLoopWaypoints(start, radiusKm, rotationOffset, targetKm) {
             const points = [];
-            // Point de départ exact et forcé
             points.push([start[0], start[1]]);
-
-            // Nombre de points de contrôle proportionnel au kilométrage (environ 1 point tous les 15-20 km pour rester fluide sans zigzags)
             let numWaypoints = targetKm > 80 ? 4 : (targetKm > 40 ? 3 : 2);
 
             for (let i = 0; i < numWaypoints; i++) {
@@ -441,7 +435,6 @@
                 points.push([start[0] + latOffset, start[1] + lonOffset]);
             }
 
-            // Retour exact et forcé au point de départ
             points.push([start[0], start[1]]);
             return points;
         }
