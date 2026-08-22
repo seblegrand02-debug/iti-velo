@@ -6,24 +6,23 @@
     <title>VéloRoute Pro - Calibrage Intelligent</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Leaflet CSS & JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></link>
     <!-- Chart.js for elevation profile -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Leaflet CSS & JS for Interactive Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
-        #map { height: 100%; min-height: 400px; width: 100%; border-radius: 0.75rem; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .leaflet-container { background: #0b0f19 !important; font-family: inherit; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col">
 
-    <!-- Header -->
     <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-md">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="flex items-center space-x-3">
@@ -32,17 +31,16 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-bold tracking-wide text-white">VéloRoute <span class="text-emerald-400">Pro</span></h1>
-                    <p class="text-xs text-slate-400">Moteur d'ajustement kilométrique automatique</p>
+                    <p class="text-xs text-slate-400">Calibrage intelligent • Anti-extensions &amp; zéro aller-retour</p>
                 </div>
             </div>
             <div class="text-xs bg-slate-700/50 border border-slate-600 px-3 py-1.5 rounded-full text-slate-300 hidden sm:flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                Boucles Auto-ajustées (±10%)
+                Tolérance min -15% / max illimité • 5 Itinéraires
             </div>
         </div>
     </header>
 
-    <!-- App Container -->
     <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         <!-- Controls & Routes List Sidebar -->
@@ -55,11 +53,10 @@
                 </h2>
                 
                 <form id="generator-form" onsubmit="event.preventDefault(); generateRoutes();" class="space-y-4">
-                    <!-- Point de départ personnalisable -->
                     <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Point de départ (Adresse, Ville ou clic carte)</label>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Point de départ (Adresse, Ville)</label>
                         <div class="flex gap-2">
-                            <input type="text" id="start-location-input" placeholder="Ex: Paris, Lyon, Nantes..." 
+                            <input type="text" id="start-location-input" value="Paris" placeholder="Ex: Paris, Lyon, Nantes..." 
                                 class="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
                             <button type="button" onclick="searchLocation()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm transition flex items-center justify-center">
                                 <i class="fa-solid fa-magnifying-glass"></i>
@@ -68,7 +65,7 @@
                                 <i class="fa-solid fa-location-crosshairs text-emerald-400"></i>
                             </button>
                         </div>
-                        <p id="location-status" class="text-[11px] text-slate-400 mt-1">Cliquez sur la carte ou cherchez un lieu pour changer le départ.</p>
+                        <p id="location-status" class="text-[11px] text-slate-400 mt-1">Recherchez une ville ou utilisez votre position.</p>
                     </div>
 
                     <div>
@@ -95,7 +92,7 @@
                     </div>
 
                     <button type="submit" id="btn-generate" class="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer 3 à 5 Itinéraires Précis
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 boucles pures
                     </button>
                 </form>
             </div>
@@ -103,39 +100,42 @@
             <!-- List of Generated Routes -->
             <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl flex-1 flex flex-col min-h-[350px]">
                 <h2 class="text-lg font-semibold mb-3 flex items-center justify-between text-white">
-                    <span><i class="fa-solid fa-route text-emerald-400 mr-2"></i> Itinéraires Calibrés</span>
+                    <span><i class="fa-solid fa-route text-emerald-400 mr-2"></i> Itinéraires Purifiés</span>
                     <span id="route-count" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full">0</span>
                 </h2>
 
                 <div id="routes-container" class="space-y-3 overflow-y-auto max-h-[420px] pr-1 custom-scrollbar flex-1">
                     <div id="routes-placeholder" class="text-center py-12 text-slate-500 flex flex-col items-center justify-center h-full">
                         <i class="fa-solid fa-compass-drafting text-4xl mb-3 text-slate-600"></i>
-                        <p class="text-sm">Lancez la recherche pour afficher vos boucles ajustées au kilomètre près.</p>
+                        <p class="text-sm">Lancez la recherche pour afficher vos 5 boucles sans aucune extension artificielle.</p>
                     </div>
                 </div>
             </div>
 
         </div>
 
-        <!-- Visualization Map & Export Panel -->
         <div class="lg:col-span-7 flex flex-col space-y-6">
             
             <!-- Map Container -->
-            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-xl flex flex-col h-[450px]">
-                <div class="flex justify-between items-center mb-3">
+            <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 shadow-xl flex flex-col">
+                <div class="flex flex-wrap justify-between items-center mb-3 gap-2">
                     <h2 class="text-md font-semibold text-white flex items-center">
-                        <i class="fa-solid fa-map-location-dot text-emerald-400 mr-2"></i> Aperçu Carte
+                        <i class="fa-solid fa-map-location-dot text-emerald-400 mr-2"></i> Aperçu Carte interactive
                     </h2>
-                    <span id="selected-route-name" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-3 py-1 rounded-full">
+                    <span id="selected-route-name" class="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-3 py-1 rounded-full truncate max-w-[260px]">
                         Aucun itinéraire sélectionné
                     </span>
                 </div>
-                <div id="map" class="z-10 flex-1"></div>
+                <div class="relative w-full rounded-xl overflow-hidden bg-slate-950 border border-slate-700" style="height: 400px;">
+                    <div id="map" class="w-full h-full z-10"></div>
+                    <div id="canvas-overlay-text" class="absolute inset-0 z-20 flex items-center justify-center pointer-events-none text-slate-400 text-sm bg-slate-950/80 transition-opacity duration-300">
+                        Cliquez sur "Générer 5 boucles pures" pour afficher le tracé.
+                    </div>
+                </div>
             </div>
 
             <!-- Profile & Export Section -->
             <div class="bg-slate-800 rounded-2xl p-5 border border-slate-700 shadow-xl">
-                <!-- Elevation Chart -->
                 <div class="mb-5">
                     <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center">
                         <i class="fa-solid fa-chart-area mr-1.5 text-emerald-400"></i> Profil Altimétrique
@@ -145,7 +145,6 @@
                     </div>
                 </div>
 
-                <!-- Export Options -->
                 <div>
                     <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
                         Exporter le parcours sélectionné
@@ -168,7 +167,6 @@
 
     </main>
 
-    <!-- Custom Modal Notification -->
     <div id="modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
         <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
             <h3 id="modal-title" class="text-lg font-bold text-white mb-2">Notice</h3>
@@ -181,61 +179,82 @@
         </div>
     </div>
 
-    <!-- Application Script Logic -->
     <script>
-        let map;
         let startLocation = [48.8566, 2.3522]; // Paris par défaut
-        let startMarker = null;
         let generatedRoutes = [];
         let selectedRoute = null;
-        let mapLayers = [];
         let elevationChart = null;
+        let map = null;
+        let routeLayerGroup = null;
 
         const routeThemes = [
-            { name: "Boucle Nord", color: "#10b981", angle: 0 },
-            { name: "Boucle Est", color: "#3b82f6", angle: 1.25 },
-            { name: "Boucle Sud", color: "#ef4444", angle: 2.50 },
-            { name: "Boucle Ouest", color: "#f59e0b", angle: 3.75 },
-            { name: "Boucle Nord-Ouest", color: "#8b5cf6", angle: 5.00 }
+            { name: "Boucle Nord", color: "#10b981", rotationOffset: 0 },
+            { name: "Boucle Est", color: "#3b82f6", rotationOffset: Math.PI / 2 },
+            { name: "Boucle Sud", color: "#8b5cf6", rotationOffset: Math.PI },
+            { name: "Boucle Ouest", color: "#f59e0b", rotationOffset: (3 * Math.PI) / 2 },
+            { name: "Boucle Nord-Est", color: "#ec4899", rotationOffset: Math.PI / 4 }
         ];
 
         window.onload = function() {
             initMap();
             initChart();
+            searchLocation();
         };
 
         function initMap() {
-            map = L.map('map').setView(startLocation, 12);
-            
+            map = L.map('map', { zoomControl: false }).setView(startLocation, 12);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                subdomains: 'abcd',
                 maxZoom: 19
             }).addTo(map);
 
-            updateStartMarker(startLocation[0], startLocation[1], "Point de départ actuel");
-
-            map.on('click', function(e) {
-                startLocation = [e.latlng.lat, e.latlng.lng];
-                updateStartMarker(startLocation[0], startLocation[1], "Nouveau départ personnalisé");
-                reverseGeocode(startLocation[0], startLocation[1]);
-            });
+            routeLayerGroup = L.layerGroup().addTo(map);
+            setTimeout(() => { map.invalidateSize(); }, 300);
         }
 
-        function updateStartMarker(lat, lng, popupText) {
-            if (startMarker) map.removeLayer(startMarker);
-            startMarker = L.circleMarker([lat, lng], {
-                radius: 9,
-                fillColor: "#10b981",
-                color: "#ffffff",
-                weight: 2.5,
-                opacity: 1,
-                fillOpacity: 0.95
-            }).addTo(map).bindPopup(`<b>${popupText}</b>`).openPopup();
+        function drawRouteOnMap(route) {
+            routeLayerGroup.clearLayers();
+            const coords = route.coordinates;
+            if (!coords || coords.length === 0) return;
+
+            const latLngs = coords.map(pt => [pt[0], pt[1]]);
+
+            const glowLine = L.polyline(latLngs, {
+                color: route.color,
+                weight: 8,
+                opacity: 0.4,
+                smoothFactor: 1
+            });
+            routeLayerGroup.addLayer(glowLine);
+
+            const mainLine = L.polyline(latLngs, {
+                color: route.color,
+                weight: 4,
+                opacity: 0.9,
+                smoothFactor: 1
+            });
+            routeLayerGroup.addLayer(mainLine);
+
+            const exactStart = [startLocation[0], startLocation[1]];
+            const startIcon = L.divIcon({
+                className: 'custom-div-icon',
+                html: `<div style="background-color: ${route.color}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid #ffffff; box-shadow: 0 0 10px rgba(0,0,0,0.6);"></div>`,
+                iconSize: [16, 16],
+                iconAnchor: [8, 8]
+            });
+
+            const startMarker = L.marker(exactStart, { icon: startIcon }).bindPopup(`<b style="color: #0f172a;">Départ / Arrivée (Exact)</b><br>${route.name}`);
+            routeLayerGroup.addLayer(startMarker);
+
+            map.fitBounds(mainLine.getBounds(), { padding: [40, 40] });
         }
 
         function initChart() {
-            const ctx = document.getElementById('elevationChart').getContext('2d');
-            elevationChart = new Chart(ctx, {
+            const ctxChart = document.getElementById('elevationChart').getContext('2d');
+            elevationChart = new Chart(ctxChart, {
                 type: 'line',
                 data: {
                     labels: [],
@@ -270,9 +289,8 @@
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         startLocation = [position.coords.latitude, position.coords.longitude];
-                        map.setView(startLocation, 13);
-                        updateStartMarker(startLocation[0], startLocation[1], "Votre position GPS");
                         reverseGeocode(startLocation[0], startLocation[1]);
+                        document.getElementById('location-status').innerText = "Position GPS enregistrée avec succès.";
                     },
                     () => {
                         showModal("Géolocalisation", "Impossible d'accéder à votre position GPS.");
@@ -289,57 +307,51 @@
                 const data = await res.json();
                 if (data && data.length > 0) {
                     startLocation = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-                    map.setView(startLocation, 12);
-                    updateStartMarker(startLocation[0], startLocation[1], data[0].display_name);
-                } else {
-                    showModal("Recherche", "Lieu introuvable. Veuillez affiner votre saisie.");
+                    document.getElementById('location-status').innerText = `Départ défini sur : ${data[0].display_name.split(',')[0]}`;
                 }
-            } catch (err) {
-                showModal("Erreur", "Erreur lors de la recherche du lieu.");
-            }
+            } catch (err) {}
         }
 
         async function reverseGeocode(lat, lon) {
             try {
                 const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
                 const data = await res.json();
-                if (data && data.display_name) {
-                    document.getElementById('start-location-input').value = data.address.city || data.address.town || data.address.village || data.display_name.split(',')[0];
+                if (data && data.address) {
+                    const placeName = data.address.city || data.address.town || data.address.village || "Lieu personnalisé";
+                    document.getElementById('start-location-input').value = placeName;
                 }
             } catch (e) {}
         }
 
-        // Moteur de génération avec boucle de correction automatique du rayon pour épouser la distance cible (±10%)
         async function generateRoutes() {
             const targetKm = parseFloat(document.getElementById('distance').value);
             const surfaceType = document.getElementById('surface-type').value;
             const btn = document.getElementById('btn-generate');
             
             btn.disabled = true;
-            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Calibrage exact en cours...`;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Génération de 5 boucles pures...`;
 
             generatedRoutes = [];
-            clearMapLayers();
-
             const profile = surfaceType === 'cycling' ? 'cycling' : 'driving';
-            const minAcceptable = targetKm * 0.9;
-            const maxAcceptable = targetKm * 1.1;
+            
+            const roadTortuosityFactor = 1.35;
+            let adjustedTargetKm = targetKm / roadTortuosityFactor;
+            let baseRadiusKm = adjustedTargetKm / (2 * Math.PI);
+            
+            let collectedRoutes = [];
+            const scaleModifiers = [1.0, 0.88, 1.15, 0.82, 1.35, 1.60];
 
-            let validRoutes = [];
+            for (let m = 0; m < scaleModifiers.length; m++) {
+                if (collectedRoutes.length >= 5) break;
+                let currentRadius = baseRadiusKm * scaleModifiers[m];
 
-            for (let i = 0; i < routeThemes.length; i++) {
-                if (validRoutes.length >= 5) break;
-                const theme = routeThemes[i];
+                for (let i = 0; i < routeThemes.length; i++) {
+                    if (collectedRoutes.length >= 5) break;
+                    const theme = routeThemes[i];
 
-                try {
-                    // Estimation initiale du rayon de la boucle
-                    let currentRadius = targetKm / 5.2;
-                    let bestRouteData = null;
-                    let bestDiff = Infinity;
-
-                    // Boucle d'auto-ajustement (itérations de calibration)
-                    for (let attempt = 0; attempt < 3; attempt++) {
-                        const waypoints = getPreciseLoopWaypoints(startLocation, currentRadius, theme.angle);
+                    try {
+                        // ESPACEMENT PROPORTIONNEL : 2 à 3 waypoints intermédiaires réguliers pour éviter les zigzags et allers-retours
+                        const waypoints = getCleanLoopWaypoints(startLocation, currentRadius, theme.rotationOffset, targetKm);
                         const coordsString = waypoints.map(pt => `${pt[1]},${pt[0]}`).join(';');
                         const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsString}?overview=full&geometries=geojson`;
 
@@ -347,121 +359,98 @@
                         const data = await response.json();
 
                         if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-                            const route = data.routes[0];
-                            const actualDistKm = route.distance / 1000;
-                            const diff = Math.abs(actualDistKm - targetKm);
+                            let latLngs = data.routes[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                            
+                            // IMPOSE LE DÉPART ET L'ARRIVÉE EXACTS SUR startLocation
+                            latLngs[0] = [startLocation[0], startLocation[1]];
+                            latLngs[latLngs.length - 1] = [startLocation[0], startLocation[1]];
 
-                            if (diff < bestDiff) {
-                                bestDiff = diff;
-                                bestRouteData = { route, actualDistKm };
-                            }
+                            let actualDistKm = calculateRouteDistance(latLngs);
 
-                            // Si on est déjà dans la cible exacte, on stoppe les itérations pour ce thème
-                            if (actualDistKm >= minAcceptable && actualDistKm <= maxAcceptable) {
-                                break;
-                            }
+                            // RÈGLE : Minimum -15% vers le bas, mais AUCUNE LIMITE vers le haut
+                            const minAllowed = targetKm * 0.85;
+                            if (actualDistKm >= minAllowed) {
+                                const isDuplicate = collectedRoutes.some(r => Math.abs(r.distance - actualDistKm) < 1.0);
+                                if (!isDuplicate) {
+                                    const estimatedDuration = formatDuration(data.routes[0].duration);
+                                    const elevations = await fetchElevationsForRoute(latLngs);
+                                    const elevationGain = calculateElevationGain(elevations);
 
-                            // Ajustement proportionnel du rayon pour l'itération suivante
-                            if (actualDistKm > 0) {
-                                const correctionRatio = targetKm / actualDistKm;
-                                currentRadius *= correctionRatio;
+                                    collectedRoutes.push({
+                                        id: collectedRoutes.length + 1,
+                                        name: `${theme.name} (${Math.round(actualDistKm)} km)`,
+                                        type: `${actualDistKm.toFixed(1)} km`,
+                                        surface: surfaceType === 'cycling' ? 'Route & Asphalte' : 'Voies ouvertes',
+                                        distance: actualDistKm.toFixed(1),
+                                        elevationGain: elevationGain,
+                                        estimatedTime: estimatedDuration,
+                                        color: theme.color,
+                                        icon: "fa-circle-notch",
+                                        coordinates: latLngs,
+                                        elevationProfile: elevations
+                                    });
+                                }
                             }
                         }
-                    }
-
-                    // Validation finale de l'itinéraire calibré
-                    if (bestRouteData && bestRouteData.actualDistKm >= minAcceptable && bestRouteData.actualDistKm <= maxAcceptable) {
-                        const route = bestRouteData.route;
-                        const actualDistKm = bestRouteData.actualDistKm;
-                        const latLngs = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-                        const estimatedDuration = formatDuration(route.duration);
-                        const elevations = await fetchElevationsForRoute(latLngs);
-                        const elevationGain = calculateElevationGain(elevations);
-
-                        validRoutes.push({
-                            id: validRoutes.length + 1,
-                            name: theme.name,
-                            type: `Cible ${targetKm} km (Réel ${actualDistKm.toFixed(1)} km)`,
-                            surface: surfaceType === 'cycling' ? 'Route & Asphalte' : 'Voies ouvertes',
-                            distance: actualDistKm.toFixed(1),
-                            elevationGain: elevationGain,
-                            estimatedTime: estimatedDuration,
-                            color: theme.color,
-                            icon: "fa-circle-check",
-                            coordinates: latLngs,
-                            elevationProfile: elevations
-                        });
-                    }
-                } catch (e) {
-                    console.error("Erreur routage", e);
+                    } catch (e) {}
                 }
             }
 
-            // Si aucune route n'a validé la tolérance stricte, on prend la plus proche des tentatives
-            if (validRoutes.length === 0) {
-                try {
-                    const theme = routeThemes[0];
-                    const waypoints = getPreciseLoopWaypoints(startLocation, targetKm / 5.0, 0);
-                    const coordsString = waypoints.map(pt => `${pt[1]},${pt[0]}`).join(';');
-                    const url = `https://router.project-osrm.org/route/v1/${profile}/${coordsString}?overview=full&geometries=geojson`;
-                    const res = await fetch(url);
-                    const data = await res.json();
-                    if (data.code === 'Ok' && data.routes.length > 0) {
-                        const route = data.routes[0];
-                        const actualDistKm = route.distance / 1000;
-                        const latLngs = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
-                        const elevations = await fetchElevationsForRoute(latLngs);
-                        validRoutes.push({
-                            id: 1,
-                            name: "Boucle Ajustée de Secours",
-                            type: `${actualDistKm.toFixed(1)} km`,
-                            surface: "Route principale",
-                            distance: actualDistKm.toFixed(1),
-                            elevationGain: calculateElevationGain(elevations),
-                            estimatedTime: formatDuration(route.duration),
-                            color: "#10b981",
-                            icon: "fa-route",
-                            coordinates: latLngs,
-                            elevationProfile: elevations
-                        });
-                    }
-                } catch(err) {}
-            }
-
-            if (validRoutes.length > 0) {
-                generatedRoutes = validRoutes;
+            if (collectedRoutes.length > 0) {
+                generatedRoutes = collectedRoutes;
                 renderRouteCards();
                 selectRoute(1);
+                document.getElementById('canvas-overlay-text').style.opacity = '0';
+                setTimeout(() => { document.getElementById('canvas-overlay-text').style.display = 'none'; }, 300);
             } else {
-                showModal("Attention", "Le réseau routier autour de ce point ne permet pas de boucler à cette distance précise. Essayez d'ajuster légèrement la distance.");
+                showModal("Ajustement requis", "Aucune boucle n'a pu être trouvée avec la tolérance minimale de -15%. Essayez d'ajuster légèrement la distance demandée.");
             }
 
             btn.disabled = false;
-            btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Générer 3 à 5 Itinéraires Précis`;
+            btn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Générer 5 boucles pures`;
         }
 
-        // Calcule des waypoints en ovale orienté
-        function getPreciseLoopWaypoints(start, radiusKm, baseAngle) {
-            const points = [start];
-            for (let i = 0; i < 4; i++) {
-                const angle = baseAngle + (i * (Math.PI / 2));
+        function getDistanceFromLatLonInMeters(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * (Math.PI/180);
+            const dLon = (lon2 - lon1) * (Math.PI/180);
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+        }
+
+        function calculateRouteDistance(coords) {
+            let totalMeters = 0;
+            for (let i = 1; i < coords.length; i++) {
+                totalMeters += getDistanceFromLatLonInMeters(coords[i-1][0], coords[i-1][1], coords[i][0], coords[i][1]);
+            }
+            return totalMeters / 1000;
+        }
+
+        function getCleanLoopWaypoints(start, radiusKm, rotationOffset, targetKm) {
+            const points = [];
+            // Point de départ exact et forcé
+            points.push([start[0], start[1]]);
+
+            // Nombre de points de contrôle proportionnel au kilométrage (environ 1 point tous les 15-20 km pour rester fluide sans zigzags)
+            let numWaypoints = targetKm > 80 ? 4 : (targetKm > 40 ? 3 : 2);
+
+            for (let i = 0; i < numWaypoints; i++) {
+                const angle = rotationOffset + (i * (2 * Math.PI / numWaypoints));
                 const latOffset = (radiusKm / 111) * Math.cos(angle);
                 const lonOffset = (radiusKm / (111 * Math.cos(start[0] * Math.PI / 180))) * Math.sin(angle);
                 points.push([start[0] + latOffset, start[1] + lonOffset]);
             }
-            points.push(start);
+
+            // Retour exact et forcé au point de départ
+            points.push([start[0], start[1]]);
             return points;
         }
 
         async function fetchElevationsForRoute(latLngs) {
             const step = Math.max(1, Math.floor(latLngs.length / 25));
             const sampled = [];
-            for (let i = 0; i < latLngs.length; i += step) {
-                sampled.push(latLngs[i]);
-            }
-            if (sampled[sampled.length - 1] !== latLngs[latLngs.length - 1]) {
-                sampled.push(latLngs[latLngs.length - 1]);
-            }
+            for (let i = 0; i < latLngs.length; i += step) sampled.push(latLngs[i]);
+            if (sampled[sampled.length - 1] !== latLngs[latLngs.length - 1]) sampled.push(latLngs[latLngs.length - 1]);
 
             const lats = sampled.map(p => p[0].toFixed(4)).join(',');
             const lons = sampled.map(p => p[1].toFixed(4)).join(',');
@@ -469,11 +458,8 @@
             try {
                 const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lons}`);
                 const data = await res.json();
-                if (data && data.elevation) {
-                    return data.elevation.map(e => Math.round(e || 100));
-                }
+                if (data && data.elevation) return data.elevation.map(e => Math.round(e || 100));
             } catch (e) {}
-
             return sampled.map(() => 150);
         }
 
@@ -553,18 +539,7 @@
                 }
             });
 
-            clearMapLayers();
-            
-            const polyline = L.polyline(selectedRoute.coordinates, {
-                color: selectedRoute.color,
-                weight: 5,
-                opacity: 0.9,
-                lineJoin: 'round'
-            }).addTo(map);
-
-            mapLayers.push(polyline);
-            map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
-
+            drawRouteOnMap(selectedRoute);
             document.getElementById('selected-route-name').innerText = `${selectedRoute.name} (${selectedRoute.distance} km)`;
             updateElevationChart(selectedRoute.elevationProfile);
 
@@ -573,15 +548,9 @@
             document.getElementById('btn-garmin').disabled = false;
         }
 
-        function clearMapLayers() {
-            mapLayers.forEach(layer => map.removeLayer(layer));
-            mapLayers = [];
-        }
-
         function updateElevationChart(data) {
             if (!elevationChart) return;
             const labels = data.map((_, index) => `${Math.round((index / (data.length - 1)) * selectedRoute.distance)} km`);
-            
             elevationChart.data.labels = labels;
             elevationChart.data.datasets[0].data = data;
             elevationChart.data.datasets[0].borderColor = selectedRoute.color;
@@ -590,17 +559,7 @@
 
         function exportGPX() {
             if (!selectedRoute) return;
-
-            let gpxContent = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="VéloRoute Pro" xmlns="http://www.topografix.com/GPX/1/1">
-  <metadata>
-    <name>${escapeXml(selectedRoute.name)}</name>
-  </metadata>
-  <trk>
-    <name>${escapeXml(selectedRoute.name)}</name>
-    <type>Cycling</type>
-    <trkseg>
-`;
+            let gpxContent = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="VéloRoute Pro" xmlns="http://www.topografix.com/GPX/1/1">\n  <metadata><name>${escapeXml(selectedRoute.name)}</name></metadata>\n  <trk>\n    <name>${escapeXml(selectedRoute.name)}</name>\n    <type>Cycling</type>\n    <trkseg>\n`;
 
             selectedRoute.coordinates.forEach((pt, idx) => {
                 const ele = selectedRoute.elevationProfile[Math.floor((idx / selectedRoute.coordinates.length) * selectedRoute.elevationProfile.length)] || 100;
@@ -624,27 +583,18 @@
 
         function exportToStrava() {
             if (!selectedRoute) return;
-            showModal(
-                "Export vers Strava",
-                `Pour importer ce parcours sur Strava :<br><br>1. Téléchargez le fichier GPX.<br>2. Ouvrez le créateur d'itinéraires Strava et importez le fichier.`,
-                () => window.open("https://www.strava.com/routes/new", '_blank')
-            );
+            showModal("Export vers Strava", "Pour importer ce parcours sur Strava :<br><br>1. Téléchargez le fichier GPX.<br>2. Ouvrez le créateur d'itinéraires Strava et importez le fichier.", () => window.open("https://www.strava.com/routes/new", '_blank'));
         }
 
         function exportToGarmin() {
             if (!selectedRoute) return;
-            showModal(
-                "Export vers Garmin Connect",
-                `Pour synchroniser avec Garmin :<br><br>1. Téléchargez le fichier GPX.<br>2. Allez dans Garmin Connect > Entraînement > Parcours > Importer.`,
-                () => window.open("https://connect.garmin.com/modern/courses", '_blank')
-            );
+            showModal("Export vers Garmin Connect", "Pour synchroniser avec Garmin :<br><br>1. Téléchargez le fichier GPX.<br>2. Allez dans Garmin Connect > Entraînement > Parcours > Importer.", () => window.open("https://connect.garmin.com/modern/courses", '_blank'));
         }
 
         function showModal(title, text, onConfirm = null) {
             document.getElementById('modal-title').innerText = title;
             document.getElementById('modal-body').innerHTML = text;
-            const modal = document.getElementById('modal');
-            modal.classList.remove('hidden');
+            document.getElementById('modal').classList.remove('hidden');
             window.pendingModalConfirm = onConfirm || null;
         }
 
@@ -670,4 +620,3 @@
     </script>
 </body>
 </html>
-
